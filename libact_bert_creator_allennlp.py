@@ -6,8 +6,8 @@ from bert_sequence_tagger.bert_utils import get_parameters_without_decay, get_mo
 from bert_sequence_tagger.metrics import f1_entity_level
 
 from pytorch_transformers import BertTokenizer, AdamW
-
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 from allennlp.modules.token_embedders import PretrainedTransformerMismatchedEmbedder
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
 from allennlp.models import SimpleTagger
@@ -57,6 +57,7 @@ class LibActBertCreator:
         self.vocab = vocab
         self.reader = reader
         self.bs_pred = bs_pred
+
     def __call__(self, **libact_nn_args):
         def model_ctor():
             # model = BertForTokenClassificationCustom.from_pretrained(self._bert_model_type,
@@ -78,14 +79,12 @@ class LibActBertCreator:
                                calculate_span_f1=True,
                                label_encoding='IOB1').cuda()
 
-
             return tagger
 
         def trainer_ctor(tagger, corpus_len, train_dataloader, val_dataloader):
             optimizer = AdamW(tagger.parameters(),
                               lr=self._lr, betas=(0.9, 0.999),
                               eps=1e-6, weight_decay=0.01, correct_bias=True)
-
 
             # lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=self._patience)
             #

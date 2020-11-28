@@ -1,49 +1,42 @@
+import gc
+import sys
+import math
+import random
+from collections.abc import Iterable
+
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split
+
 from allennlp.data import allennlp_collate
 from allennlp.predictors import SentenceTaggerPredictor
+from allennlp.data.tokenizers import Token
+
 from libact.base.interfaces import ProbabilisticModel
 from libact.base.dataset import Dataset
 # from libact.query_strategies import RandomSampling
-from allennlp.data.tokenizers import Token
 
-
-import torch
-import numpy as np
 from overrides import overrides
-from sklearn.model_selection import train_test_split
-from collections.abc import Iterable
-import gc
-import random
-import math
-import sys
-
 from isanlp.ru.processor_tokenizer_ru import ProcessorTokenizerRu
-from torch.utils.data import DataLoader
 
 
 def find_in_between(offsets, start, end):
-    res = []
-    for i, offset in enumerate(offsets):
-        if start <= offset and offset <= end:
-            res.append(i)
+    between = lambda x, l, r: l <= x and x <= r
+    res = [i for i, x in enumerate(offsets) if between(x, start, end)]
+
     return res
 
 
-def tokenize_X(X):
-    tokenizer = ProcessorTokenizerRu()
-    res = []
-    for sent in X:
-        res.append(tokenizer(sent))
-
-    return [[e.text for e in res_sent] for res_sent in res]
+def tokenize_X(X, tokenizer=ProcessorTokenizerRu()):
+    return [[e.text for e in tokenizer(sent)] for sent in X]
 
 
-def convert_to_bio_format(X, y):
-    tokenizer = ProcessorTokenizerRu()
+def convert_to_bio_format(X, y, tokenizer=ProcessorTokenizerRu()):
     final_res = []
     X_tokenized = []
-    for i, sent_y in enumerate(y):
-        sent = X[i]
 
+    for sent, sent_y in zip(X, y):
         tokens = tokenizer(sent)
         offsets = [token.begin for token in tokens]
         X_tokenized.append([token.text for token in tokens])
@@ -65,28 +58,29 @@ def convert_to_bio_format(X, y):
 
     return X_tokenized, final_res
 
-class CustomSentenceTaggerPredictor(SentenceTaggerPredictor):
 
+class CustomSentenceTaggerPredictor(SentenceTaggerPredictor):
     def __init__(self,  model, dataset_reader, batch_size):
         super().__init__(model, dataset_reader)
         self.batch_size = batch_size
+
     @overrides
     def predict(self, list_of_lists):
         preds = {'logits': [], 'class_probabilities': [], 'words': [], 'tags': []}
-        i = 0
-        while i < len(list_of_lists):
-            preds_0 = self.predict_batch_json(list_of_lists[i:i + self.batch_size])
-            for pred in preds_0:
 
+        for i in range(0, len(list_of_lists), self.batch_size):
+            preds_0 = self.predict_batch_json(list_of_lists[i:i + self.batch_size])
+
+            for pred in preds_0:
                 for key in preds.keys():
                     if key in ['logits', 'class_probabilities']:
                         buffer = np.array(pred[key])
                     else:
                         buffer = pred[key][:len(pred['words'])]
                     preds[key].append(buffer)
-                
-            i+=self.batch_size
-        preds_0 = self.predict_batch_json(list_of_lists[i-self.batch_size:len(list_of_lists)])
+
+        preds_0 = self.predict_batch_json(list_of_lists[i-self.batch_size: len(list_of_lists)])
+
         for pred in preds_0:
             for key in preds.keys():
                 if key in ['logits', 'class_probabilities']:
@@ -94,6 +88,7 @@ class CustomSentenceTaggerPredictor(SentenceTaggerPredictor):
                 else:
                     buffer = pred[key][:len(pred['words'])]
                 preds[key].append(buffer)
+
         return preds
 
     @overrides
@@ -111,10 +106,7 @@ class CustomSentenceTaggerPredictor(SentenceTaggerPredictor):
         if the instances have some dependency on each other, this method should be overridden
         directly.
         """
-        instances = []
-        for sentence in list_of_lists:
-            instances.append(self._json_to_instance(sentence))
-        return instances
+        return [self._json_to_instance(sent) for sent in list_of_lists]
 
 
 class LibActNN(ProbabilisticModel):
@@ -136,6 +128,7 @@ class LibActNN(ProbabilisticModel):
                  additional_X=None,
                  additional_y=None,
                  ):
+
         self._model_ctor = model_ctor
         self._trainer_ctor = trainer_ctor
         self._model = None
@@ -169,13 +162,15 @@ class LibActNN(ProbabilisticModel):
         # probs = preds['class_probabilities']
         # return self._model.predict(X)
         return preds
-#TODO переделать эти две функции
+
+
+    #TODO: переделать эти две функции
     def predict_proba(self, X):
-#         print('lol', np.asarray(self._predict_core(X)['class_probabilities']).reshape(-1, 1)[0])
-        
-#         print('lolkek', np.asarray(self._predict_core(X)['class_probabilities'])[0])
-#         print('kek', self._predict_core(X)['class_probabilities'][0])
-        
+        # print('lol', np.asarray(self._predict_core(X)['class_probabilities']).reshape(-1, 1)[0])
+
+        # print('lolkek', np.asarray(self._predict_core(X)['class_probabilities'])[0])
+        # print('kek', self._predict_core(X)['class_probabilities'][0])
+
         return np.array(self._predict_core(X)['class_probabilities'])#.reshape(-1, 1)
 
     def predict(self, X):
@@ -263,6 +258,7 @@ class LibActNN(ProbabilisticModel):
             self_training_examples = [(x, py) for x, py in zip(X, pred_y) if not all((tag == 'O' for tag in py))]
 
             train_data += self_training_examples
+
         self.train_data_for_allenlp = self.reader.from_list_to_dataset(train_data)
         self.val_data_for_allenlp = self.reader.from_list_to_dataset(valid_data)
         self.train_data_for_allenlp.index_with(self.vocab)
