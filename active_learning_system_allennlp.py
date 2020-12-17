@@ -1,12 +1,21 @@
+import os
+import copy
+import logging
 import warnings
+import itertools
+import collections
+from pathlib import Path
+from IPython.core.display import display, HTML
+from typing import Dict, List, Sequence, Iterable
 
 warnings.filterwarnings("ignore")
 
-import collections, pandas as pd, numpy as np
+import torch
+import pandas as pd
+import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from libact.query_strategies import UncertaintySampling
 # from libact.base.dataset import Dataset
-import torch
 
 from allennlp.data.dataset_readers import Conll2003DatasetReader
 from allennlp.data.token_indexers import PretrainedTransformerMismatchedIndexer
@@ -27,7 +36,6 @@ from actleto.annotator.visualizers.seq_annotation import SeqAnnotationVisualizer
 
 from flair.datasets import ColumnCorpus
 from bert_sequence_tagger.bert_utils import make_bert_tag_dict_from_flair_corpus
-from utils_data import create_helper, convert_y_to_dict_format
 
 from libact_bert_creator_allennlp import LibActBertCreator
 from libact_bert_creator_allennlp import prepare_corpus
@@ -41,16 +49,6 @@ from isanlp.ru.processor_tokenizer_ru import ProcessorTokenizerRu
 from isanlp.processor_sentence_splitter import ProcessorSentenceSplitter
 from isanlp.annotation_repr import CSentence
 
-import copy
-import os
-from pathlib import Path
-
-from IPython.core.display import display, HTML
-
-from typing import Dict, List, Sequence, Iterable
-import itertools
-import logging
-
 from overrides import overrides
 
 from allennlp.common.checks import ConfigurationError
@@ -63,8 +61,9 @@ from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 from allennlp.data.tokenizers import Token
 
 from model_wrappers_allennlp import CustomSentenceTaggerPredictor
-
+from utils_data import create_helper, convert_y_to_dict_format
 from strategy_mnlp import StrategyMNLP
+
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +81,6 @@ def _is_divider(line: str) -> bool:
 
 
 class GeniaDatasetReader(Conll2003DatasetReader):
-
     def _read(self, file_path: str) -> Iterable[Instance]:
         # if `file_path` is a URL, redirect to the cache
         file_path = cached_path(file_path)
@@ -173,7 +171,6 @@ class ALSystem:
         self.reader = GeniaDatasetReader(token_indexers={'tokens': indexer}, tag_label='ner')
         self.train_dataset_for_voc = self.reader.read(data_folder + '/train.txt')
 
-
         # Creating tag dictionaries
         self.idx2tag, self.tag2idx = make_bert_tag_dict_from_flair_corpus(corpus)
         self.tags = list(set((tag.split('-')[1] for tag in self.idx2tag if len(tag.split('-')) > 1)))
@@ -236,13 +233,11 @@ class ALSystem:
         tokens = tokenizer(text)
         sentences = splitter(tokens)
 
-        sent_toks = []
-        for sent in sentences:
-            sent_toks.append([word.text for word in CSentence(tokens, sent)])
+        sent_toks = [[word.text for word in CSentence(tokens, sent)] for sent in sentences]
         predictor = CustomSentenceTaggerPredictor(tagger, self.reader, self.config.PRED_BATCH_SIZE)
 
         preds_full = predictor.predict(sent_toks)
-        
+
         result = preds_full['tags'][:len(sent_toks)]
         print(result)
 #         result = tagger.predict(sent_toks)[0]
@@ -267,7 +262,6 @@ class ALSystem:
         torch.manual_seed(self.config.RANDOM_STATE)
 
         vocab = Vocabulary.from_instances(self.train_dataset_for_voc.instances)
-
 
         bert_creator = LibActBertCreator(
                                          # idx2tag=self.idx2tag,
@@ -367,10 +361,10 @@ class ALSystem:
         array_of_preds = []
         array_of_x = []
         number_of_correct = 0
+
         for i in range(len(self.y_test)):
             if self.y_test[i] == preds[i]:
                 number_of_correct += 1
-
             else:
                 array_of_preds.append(preds[i])
                 array_of_y_test.append(self.y_test[i])
@@ -396,6 +390,7 @@ class ALSystem:
                 flag_of_class = '+++'
             else:
                 flag_of_class = '---'
+
             print('Text   ||Actual||Prediction', flag_of_class, file=sample)
             for i in range(len(array_of_y_test[i_of_error])):
                 if array_of_y_test[i_of_error][i] != array_of_preds[i_of_error][i]:
@@ -412,15 +407,18 @@ class ALSystem:
         for val, rep in self.custom_examples:
             for _ in range(rep):
                 all_custom_examples.append(copy.deepcopy(val))
+
         print("type of custom_examples:", type(self.custom_examples))
         print("custom_examples:", self.custom_examples)
         all_answers = []
+
         for answer, rep in zip(self.custom_annotation_widget.get_answers().tolist(),
                                [e[1] for e in self.custom_examples]):
             print("answer:", answer)
             print("rep:", rep)
             for _ in range(rep):
                 all_answers.append(copy.deepcopy(answer))
+
 #         print("type answer:", type(answer), "type rep:", type(rep))
 #         print("all_custom_examples", all_custom_examples)
 #         print("all_answers", all_answers)
