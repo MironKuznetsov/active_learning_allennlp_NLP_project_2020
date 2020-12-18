@@ -33,4 +33,4 @@ The following models were used for experiments:
 3. Nils Reimers et. al., 2019. Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks. arXiv:1908.10084
 4. Yinhan Liu et al., 2019. Roberta: A robustly optimized BERT pretraining approach. arXiv:1907.11692
 5. Geoffrey Hinton et. al., 2015. Distilling the Knowledge in a Neural Network. arXiv:1503.02531
-6. Victor Sanh et al., 2019. DistilBERT, a distilled version of {BERT:} smaller, faster, cheaper and lighter. arXiv:1910.01108
+6. Victor Sanh et al., 2019. DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter. arXiv:1910.01108
