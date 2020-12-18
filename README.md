@@ -5,8 +5,6 @@
 ```
 Miron Kuznetsov, Aleksandr Belov, Dmitry Vypiraylenko
 ```
-### Abstract
-
 
 
 ### Models
